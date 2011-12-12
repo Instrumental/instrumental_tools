@@ -186,7 +186,7 @@ class SystemInspector
     end
 
     def self.load_disks
-      { :gauges => disks }
+      { :gauges => disks.merge(iostat) }
     end
 
     def self.disks
@@ -205,6 +205,21 @@ class SystemInspector
       output
     end
 
+    def self.iostat
+      output = {}
+      if system('iostat > /dev/null 2>&1')
+        lines      = `iostat -dx`.split("\n")
+        header     = lines.grep(/^Device/i).first
+        dev_lines  = lines[(lines.index(header) + 1)..-1]
+        util_index = header.split.index('%util')
+        dev_lines.each do |dev_line|
+          values = dev_line.split
+          output["disk.#{values[0]}.percent_utilization"] = values[util_index].to_f
+        end
+      end
+      output
+    end
+
     def self.load_filesystem
       { :gauges => filesystem }
     end
@@ -217,11 +232,10 @@ class SystemInspector
         'filesystem.open_files_pct_max' => (open_files.to_f / max.to_f) * 100,
       }
     end
-
   end
+
 end
 
-# TODO: utilization
 token = ENV["INSTRUMENTAL_TOKEN"]
 if !token
   token, collector = *ARGV
@@ -237,6 +251,10 @@ I = Instrumental::Agent.new(token, :collector => collector)
 host = `hostname`.chomp
 
 puts "Collecting stats under the hostname: #{host}"
+
+unless system('iostat > /dev/null 2>&1')
+  puts 'Install iostat (sysstat package) to collect disk I/O metrics.'
+end
 
 loop do
   inspector = SystemInspector.new
