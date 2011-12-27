@@ -1,16 +1,18 @@
 # Instrumental Tools
 
-Collection of tools for use with the Instrumental (http://www.instrumentalapp.com/) app
+A collection of tools for use with Instrumental ([www.instrumental.com](http://www.instrumentalapp.com/))
 
 ## instrument_server
 
 Use to collect various monitoring statistics of a server. Execute with:
 
 ```sh
-instrument_server [INSTRUMENTAL_API_KEY]
+instrument_server -k <INSTRUMENTAL_API_KEY>
 ```
 
 Linux note: Install iostat (part of the sysstat package) in order to collect disk I/O metrics.
+
+Mac OS note: Due to a bug in Ruby, instrument_server can occasionally deadlock ([bug report](http://bugs.ruby-lang.org/issues/5811)).
 
 ## instrumental
 

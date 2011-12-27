@@ -1,9 +1,17 @@
 #!/usr/bin/env ruby
 
 require 'rubygems'
-gem 'instrumental_agent'
+begin
+  gem 'instrumental_agent'
+rescue Gem::LoadError
+  puts "Requires the Instrumental Agent gem:\n"
+  puts '  gem install instrumental_agent'
+  exit 1
+end
 require 'instrumental_agent'
-
+require 'pidly'
+require 'tmpdir'
+require 'optparse'
 
 class SystemInspector
   TYPES = [:gauges, :incrementors]
@@ -127,7 +135,6 @@ class SystemInspector
     def self.load_filesystem
       {}
     end
-
   end
 
   module Linux
@@ -233,36 +240,119 @@ class SystemInspector
       }
     end
   end
-
 end
 
-token = ENV["INSTRUMENTAL_TOKEN"]
-if !token
-  token, collector = *ARGV
-else
-  collector = *ARGV
-end
-unless token
-  puts "Usage: #{$0} <token> [collector]"
-  exit 1
-end
-options = collector.nil? ? {} : { :collector => collector }
-I = Instrumental::Agent.new(token, options)
+class ServerController < Pidly::Control
+  COMMANDS = [:start, :stop, :status, :restart, :clean, :kill]
 
-host = `hostname`.chomp
+  attr_accessor :run_options
 
-puts "Collecting stats under the hostname: #{host}"
-
-unless system('iostat > /dev/null 2>&1')
-  puts 'Install iostat (sysstat package) to collect disk I/O metrics.'
-end
-
-loop do
-  inspector = SystemInspector.new
-  inspector.load_all
-  inspector.gauges.each do |stat, value|
-    I.gauge("#{host}.#{stat}", value)
+  before_start do
+    puts "Starting daemon process: #{@pid}"
   end
-  # I.increment("#{host}.#{stat}", delta)
-  sleep 10
+
+  start :run
+
+  stop do
+    puts "Attempting to kill daemon process: #{@pid}"
+  end
+
+  # after_stop :something
+
+  error do
+    puts 'Error encountered'
+  end
+
+  def self.run(options)
+    agent = Instrumental::Agent.new(options[:api_key], :collector => [options[:collector], options[:port]].compact.join(':'))
+    puts "Collecting stats under the hostname: #{options[:hostname]}"
+    loop do
+      inspector = SystemInspector.new
+      inspector.load_all
+      inspector.gauges.each do |stat, value|
+        agent.gauge("#{options[:hostname]}.#{stat}", value)
+      end
+      # agent.increment("#{host}.#{stat}", delta)
+      sleep 10
+    end
+  end
+
+  def initialize(options={})
+    @run_options = options.delete(:run_options) || {}
+    super(options)
+  end
+
+  def run
+    self.class.run(run_options)
+  end
+
+  alias_method :clean, :clean!
+end
+
+def terminal_messages
+  if `which iostat`.chomp.empty?
+    puts 'Install iostat (sysstat package) to collect disk I/O metrics.'
+  end
+end
+
+def require_api_key(options, parser)
+  unless options[:api_key] # present?
+    print parser.help
+    exit 1
+  end
+end
+
+options = {
+  :daemon => false,
+  :collector => 'instrumentalapp.com',
+  :port => '8000',
+  :hostname => `hostname`.chomp,
+}
+
+option_parser = OptionParser.new do |opts|
+  opts.banner = "Usage: instrument_server [-k API_KEY] [options] [-d #{ServerController::COMMANDS.join('|')}]"
+  opts.on('-k', '--api_key API_KEY', 'API key of your project') do |api_key|
+    options[:api_key] = api_key
+  end
+  opts.on('-c', '--collector COLLECTOR[:PORT]', "Collector (default #{options[:collector]}:#{options[:port]})") do |collector|
+    address, port = collector.split(':')
+    options[:collector] = address
+    options[:port] = port if port
+  end
+  opts.on('-d', '--daemonize', 'Run as daemon') do
+    options[:daemon] = true
+  end
+  opts.on('-h', '--help', 'Display this screen') do
+    puts opts
+    terminal_messages
+    exit
+  end
+end
+
+option_parser.parse!
+options[:api_key] ||= ENV["INSTRUMENTAL_TOKEN"]
+
+if options.delete(:daemon)
+  @server_controller = ServerController.spawn(
+    :name => 'instrument_server',
+    :path => Dir.tmpdir,
+    :pid_file => File.join(Dir.tmpdir, 'pids', 'instrument_server.pid'),
+    :verbose => true,
+    # :signal => 'kill',
+    :log_file => File.join(Dir.tmpdir, 'log', 'instrument_server.log'),
+    :run_options => options
+  )
+  command = ARGV.first && ARGV.first.to_sym
+  command ||= :start
+  if [:start, :restart].include?(command)
+    require_api_key(options, option_parser)
+  end
+  if ServerController::COMMANDS.include?(command)
+    @server_controller.send command
+  else
+    puts "Command must be one of: #{ServerController::COMMANDS.join(', ')}"
+  end
+else
+  require_api_key(options, option_parser)
+  ServerController.run(options)
 end
