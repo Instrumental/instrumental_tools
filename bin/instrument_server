@@ -17,6 +17,10 @@ class SystemInspector
   TYPES = [:gauges, :incrementors]
   attr_accessor *TYPES
 
+  def self.memory
+    @memory ||= Memory.new
+  end
+
   def initialize
     @gauges = {}
     @incrementors = {}
@@ -32,6 +36,8 @@ class SystemInspector
   end
 
   def load_all
+    self.class.memory.cycle
+
     load @platform.load_cpu
     load @platform.load_memory
     load @platform.load_disks
@@ -146,14 +152,23 @@ class SystemInspector
     end
 
     def self.cpu
-      cpu, user, nice, system, idle, iowait = `cat /proc/stat | grep cpu[^0-9]`.chomp.split(/\s+/)
-      total = user.to_i + system.to_i + idle.to_i + iowait.to_i
-      {
-        'cpu.user' => (user.to_f / total) * 100,
-        'cpu.system' => (system.to_f / total) * 100,
-        'cpu.idle' => (idle.to_f / total) * 100,
-        'cpu.iowait' => (iowait.to_f / total) * 100,
-      }
+      categories = [:user, :nice, :system, :idle, :iowait]
+      values = `cat /proc/stat | grep cpu[^0-9]`.chomp.split(/\s+/).slice(1, 5).map(&:to_f)
+      SystemInspector.memory.store(:cpu_values, values.dup)
+      if previous_values = SystemInspector.memory.retrieve(:cpu_values)
+        values.map!.with_index { |value, index| (previous_values[index] - value).abs }
+      end
+      data = Hash[*categories.zip(values).flatten]
+      total = values.inject { |memo, value| memo + value }
+
+      output = {}
+      if previous_values
+        data.each do |category, value|
+          output["cpu.#{category}"] = value / total * 100
+        end
+      end
+      output["cpu.in_use"] = 100 - data['idle'] / total * 100
+      output
     end
 
     def self.loadavg
@@ -240,6 +255,29 @@ class SystemInspector
       }
     end
   end
+
+  class Memory
+    attr_reader :past_values, :current_values
+
+    def initialize
+      @past_values = {}
+      @current_values = {}
+    end
+
+    def store(attribute, value)
+      @current_values[attribute] = value
+    end
+
+    def retrieve(attribute)
+      @past_values[attribute]
+    end
+
+    def cycle
+      @past_values = @current_values
+      @current_values = {}
+    end
+  end
+
 end
 
 class ServerController < Pidly::Control
