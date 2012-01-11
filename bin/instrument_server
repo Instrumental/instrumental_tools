@@ -208,7 +208,7 @@ class SystemInspector
     end
 
     def self.load_disks
-      { :gauges => disks.merge(iostat) }
+      { :gauges => disks.merge(diskstats) }
     end
 
     def self.disks
@@ -227,16 +227,26 @@ class SystemInspector
       output
     end
 
-    def self.iostat
+    def self.diskstats
+      entries = `cat /proc/diskstats`.chomp.split("\n").map do |line|
+        values = line.split
+        entry = {}
+        entry[:time]   = Time.now
+        entry[:device] = values[2]
+        entry[:read]   = values[6].to_f
+        entry[:write]  = values[10].to_f
+        entry[:io]     = entry[:read] + entry[:write]
+        SystemInspector.memory.store("disk_stats_#{entry[:device]}".to_sym, entry)
+      end
+
       output = {}
-      if system('iostat > /dev/null 2>&1')
-        lines      = `iostat -dx`.split("\n")
-        header     = lines.grep(/^Device/i).first
-        dev_lines  = lines[(lines.index(header) + 1)..-1]
-        util_index = header.split.index('%util')
-        dev_lines.each do |dev_line|
-          values = dev_line.split
-          output["disk.#{values[0]}.percent_utilization"] = values[util_index].to_f
+      entries.each do |entry|
+        if previous_entry = SystemInspector.memory.retrieve("disk_stats_#{entry[:device]}".to_sym)
+          time_delta = (entry[:time] - previous_entry[:time]) * 1000
+          [:read, :write, :io].each do |type|
+            utilization_delta = entry[type] - previous_entry[type]
+            output["disk.#{entry[:device]}.#{type}_utilization"] = utilization_delta / time_delta * 100
+          end
         end
       end
       output
@@ -327,12 +337,6 @@ class ServerController < Pidly::Control
   alias_method :clean, :clean!
 end
 
-def terminal_messages
-  if `which iostat`.chomp.empty?
-    puts 'Install iostat (sysstat package) to collect disk I/O metrics.'
-  end
-end
-
 def require_api_key(options, parser)
   unless options[:api_key] # present?
     print parser.help
@@ -365,7 +369,6 @@ option_parser = OptionParser.new do |opts|
   end
   opts.on('-h', '--help', 'Display this screen') do
     puts opts
-    terminal_messages
     exit
   end
 end
