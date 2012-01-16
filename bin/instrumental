@@ -1,0 +1,46 @@
+#!/usr/bin/env ruby
+
+# Provide data to Instrumental over STDIN
+#
+# Input metrics should be provided one per line and in the following format:
+# <metric name> <value> [UNIX timestamp]
+# 
+# When a timestamp is not provided, the metric is recorded at the time
+# received.
+#
+# All data is recorded using .gauge calls.
+
+require 'rubygems'
+begin
+  gem 'instrumental_agent'
+rescue Gem::LoadError
+  puts "Requires the Instrumental Agent gem:\n"
+  puts '  gem install instrumental_agent'
+  exit 1
+end
+require 'instrumental_agent'
+
+api_key = ENV['INSTRUMENTAL_TOKEN']
+unless api_key
+  puts "Requires a token:\n"
+  puts '  input | INSTRUMENTAL_TOKEN=<your API key> ./stats_to_agent'
+  exit 1
+end
+
+collector = ENV['COLLECTOR'] || 'instrumentalapp.com:8000'
+unless collector =~ /:\d+$/
+  puts "Must provide a port when defining collector:\n"
+  puts '  input | INSTRUMENTAL_TOKEN=<API KEY> COLLECTOR=<COLLECTOR:PORT> instrumental'
+  exit 1
+end
+
+I = Instrumental::Agent.new(api_key, :collector => collector)
+I.synchronous = true
+puts "Sending metrics to collector at #{collector}"
+
+input = ARGF.read
+input.each_line do |line|
+  metric, value, unix_ts = line.split(' ')
+  unix_ts ||= Time.now.to_i
+  I.gauge(metric, value, unix_ts)
+end

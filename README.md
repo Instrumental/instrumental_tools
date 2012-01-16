@@ -2,6 +2,24 @@
 
 A collection of scripts useful for monitoring servers and services with Instrumental ([www.instrumentalapp.com](http://www.instrumentalapp.com/)).
 
+## instrumental
+
+Provide data to Instrumental over STDIN.
+
+Basic usage:
+
+```sh
+input | INSTRUMENTAL_TOKEN=<API_KEY> instrumental'
+```
+
+Input metrics should be provided one per line and in the following format:
+
+`<metric name> <value> [UNIX timestamp]`
+
+When a timestamp is not provided, the metric is recorded at the time received. So, simple <metric name> <value> pairs should be sufficient for the majority of cases.
+
+Note that this script uses .gauge calls exclusively (see the [Instrumental agent documentation](https://github.com/fastestforward/instrumental_agent) for an explanation of call types).
+
 ## instrument_server
 
 Monitor server activity by collecting information on CPU and memory usage, disk IO, filesystem usage, etc.
