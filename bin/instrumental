@@ -38,8 +38,7 @@ I = Instrumental::Agent.new(api_key, :collector => collector)
 I.synchronous = true
 puts "Sending metrics to collector at #{collector}"
 
-input = ARGF.read
-input.each_line do |line|
+ARGF.each_line do |line|
   metric, value, unix_ts = line.split(' ')
   unix_ts ||= Time.now.to_i
   I.gauge(metric, value, unix_ts)
