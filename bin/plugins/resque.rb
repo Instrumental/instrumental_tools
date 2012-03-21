@@ -22,7 +22,7 @@ if Object.const_defined?("Resque")
     module ResqueInstrumentation
       # provide simple stats about resque utilization on this server
       def self.utilization_stats
-        host_filter  = Proc.new{|w| w.hostname == hostname}
+        host_filter  = Proc.new{|w| w.to_s.split(":")[0]==hostname}
         idle_filter  = Proc.new{|w| w.idle?}
         workers      = Resque.workers.select(&host_filter)
         busy_workers = Resque.working.select(&host_filter).reject(&idle_filter)
