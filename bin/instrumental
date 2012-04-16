@@ -23,7 +23,7 @@ require 'instrumental_agent'
 api_key = ENV['INSTRUMENTAL_TOKEN']
 unless api_key
   puts "Requires a token:\n"
-  puts '  input | INSTRUMENTAL_TOKEN=<your API key> ./stats_to_agent'
+  puts '  input | INSTRUMENTAL_TOKEN=<your API key> instrumental'
   exit 1
 end
 
