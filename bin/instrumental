@@ -4,7 +4,7 @@
 #
 # Input metrics should be provided one per line and in the following format:
 # <metric name> <value> [UNIX timestamp]
-# 
+#
 # When a timestamp is not provided, the metric is recorded at the time
 # received.
 #
