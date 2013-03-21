@@ -347,7 +347,7 @@ class ServerController < Pidly::Control
   end
 
   def self.run(options)
-    agent = Instrumental::Agent.new(options[:api_key], :collector => [options[:collector], options[:port]].compact.join(':'))
+    agent = Instrumental::Agent.new(options[:api_key], :collector => options[:collector])
     puts "Collecting stats under the hostname: #{options[:hostname]}"
     loop do
       t = Time.now.to_i
@@ -383,8 +383,7 @@ end
 
 options = {
   :daemon => false,
-  :collector => 'instrumentalapp.com',
-  :port => '8000',
+  :collector => 'http://instrumentalapp.com:9000/report'
   :hostname => Socket.gethostname,
 }
 
@@ -393,10 +392,8 @@ option_parser = OptionParser.new do |opts|
   opts.on('-k', '--api_key API_KEY', 'API key of your project') do |api_key|
     options[:api_key] = api_key
   end
-  opts.on('-c', '--collector COLLECTOR[:PORT]', "Collector (default #{options[:collector]}:#{options[:port]})") do |collector|
-    address, port = collector.split(':')
-    options[:collector] = address
-    options[:port] = port if port
+  opts.on('-c', '--collector COLLECTOR', "Collector (default #{options[:collector]})") do |collector|
+    options[:collector] = collector
   end
   opts.on('-H', '--hostname HOSTNAME', "Hostname to report as (default #{options[:hostname]})") do |hostname|
     options[:hostname] = hostname
