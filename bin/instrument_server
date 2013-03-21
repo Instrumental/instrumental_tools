@@ -383,7 +383,7 @@ end
 
 options = {
   :daemon => false,
-  :collector => 'http://instrumentalapp.com:9000/report'
+  :collector => 'http://instrumentalapp.com:9000/report',
   :hostname => Socket.gethostname,
 }
 
