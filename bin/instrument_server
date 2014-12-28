@@ -392,6 +392,9 @@ def require_api_key(options, parser)
   end
 end
 
+# REQUIRE ALL OF THE PLUGINS
+Dir[File.dirname(__FILE__) + "/plugins/*.rb"].each {|file| require file}
+
 options = {
   :daemon => false,
   :collector => 'collector.instrumentalapp.com',
